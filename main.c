@@ -11,12 +11,12 @@ u_int16_t convert_16bit_to_int(unsigned char *bytes) {
 }
 
 char *convert_to_string(unsigned char *bytes, int length) {
-    char *message = malloc(length);
+    char *message = malloc(length + 1);
     int i = 0;
     for (i = 0; i < length; i++) {
         message[i] = bytes[i];
     }
-
+    message[length] = '\0';
     return message;
 }
 
@@ -70,7 +70,6 @@ int main(int argc, char *argv[]) {
                 int utf8_length = convert_16bit_to_int(moving_buffer);
                 moving_buffer += 2;
                 char *message = convert_to_string(moving_buffer, utf8_length);
-                int utf8_i = 0;
                 moving_buffer += utf8_length;
                 printf("name is: %s \n", message);
                 break;
