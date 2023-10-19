@@ -189,17 +189,12 @@ void parse_constant_pool(struct ClassFileBuffer *fileBuffer, struct ClassFile *c
 
 int main(int argc, char *argv[]) {
     FILE *java_class_pointer;
-    unsigned char *buffer;
-    unsigned char *moving_buffer;
     long filelen;
 
     java_class_pointer = fopen("Main.class", "rb");
     fseek(java_class_pointer, 0, SEEK_END);
     filelen = ftell(java_class_pointer);
     rewind(java_class_pointer);
-
-    buffer = (char *)malloc(filelen * sizeof(unsigned char));
-    //fread(buffer, filelen, 1, java_class_pointer);
 
     struct ClassFileBuffer *fileBuffer = malloc(sizeof(struct ClassFileBuffer));
     fileBuffer->buffer = (unsigned char *)malloc(filelen * sizeof(unsigned char));
@@ -208,7 +203,6 @@ int main(int argc, char *argv[]) {
 
     fclose(java_class_pointer);
     
-    moving_buffer = &buffer[0];
     struct ClassFile *classFile = malloc(sizeof(struct ClassFile));
 
     parse_meta_fields(fileBuffer, classFile);
