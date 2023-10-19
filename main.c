@@ -1,24 +1,44 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 
-u_int32_t convert_byte_to_int(unsigned char *bytes) {
-    return (bytes[0] << 24) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3];
+struct ClassFileBuffer {
+    unsigned char *buffer;
+    unsigned char *moving_buffer;
+    int index;
+};
+
+u_int32_t parse_32(struct ClassFileBuffer *classFileBuffer) {
+    u_int32_t result =  (classFileBuffer->moving_buffer[0] << 24) + (classFileBuffer->moving_buffer[1] << 16) + (classFileBuffer->moving_buffer[2] << 8) + classFileBuffer->moving_buffer[3];
+    classFileBuffer->moving_buffer += 4;
+    return result;
 }
 
-u_int16_t convert_16bit_to_int(unsigned char *bytes) {
-    return (bytes[0] << 8) + bytes[1];
+u_int16_t parse_16(struct ClassFileBuffer *classFileBuffer) {
+    u_int16_t result = (classFileBuffer->moving_buffer[0] << 8) + classFileBuffer->moving_buffer[1];
+    classFileBuffer->moving_buffer += 2;
+    return result;
 }
 
-char *convert_to_string(unsigned char *bytes, int length) {
+u_int8_t parse_8(struct ClassFileBuffer *classFileBuffer) {
+    uint8_t result = classFileBuffer->moving_buffer[0];
+    classFileBuffer->moving_buffer += 1;
+    return result;
+}
+
+char *convert_to_string(struct ClassFileBuffer *classFileBuffer, int length, int is_print) {
     char *message = malloc(length + 1);
     int i = 0;
     for (i = 0; i < length; i++) {
-        message[i] = bytes[i];
+        message[i] = classFileBuffer->moving_buffer[i];
     }
     message[length] = '\0';
+    printf("msg len: %d, message: %s \n", length, message);
+    classFileBuffer->moving_buffer += length;
     return message;
 }
+
 
 struct ClassFile {
     int magic;
@@ -29,6 +49,10 @@ struct ClassFile {
     int this_class;
     int super_class;
     int interfaces_count;
+    int interfaces;
+    int methods_count;
+    int methods;
+    int attributes_count;
 };
 
 struct ConstantPoolInfo {
@@ -38,6 +62,130 @@ struct ConstantPoolInfo {
     int string_index;
 };
 
+struct AttributeInfo {
+    int attribute_name_index;
+    int attribute_length;
+    char info[];
+};
+
+struct CodeAttribute {
+    int attribute_name_index;
+    int attribute_length;
+    int max_stack;
+    int max_locals;
+    int code_length;
+    int exception_table_length;
+    int exception_table;
+    int attributes_count;
+    struct AttributeInfo attributes;
+};
+
+struct MethodInfo {
+    int access_flags;
+    int name_index;
+    int descriptor_index;
+    int attributes_count;
+    struct AttributeInfo attributes[];
+};
+
+
+void parse_meta_fields(struct ClassFileBuffer *fileBuffer, struct ClassFile *classFile) {
+    classFile->magic = parse_32(fileBuffer);
+    classFile->version_minor = parse_16(fileBuffer);
+    classFile->version_major = parse_16(fileBuffer);
+}
+
+void parse_constant_pool(struct ClassFileBuffer *fileBuffer, struct ClassFile *classFile) {
+    int index = 0;
+    for (index = 0; index < classFile->constant_pool_count - 1; index++) {
+        int tag = parse_8(fileBuffer);
+        printf("---------------------\n");
+        printf("index %d \n", index + 1);
+        switch (tag) {
+            case 0:
+                printf("tag 0 is wrong \n");
+                break;
+            case 1:
+                printf("tag is utf8\n");
+                int utf8_length = parse_16(fileBuffer);
+                char *message = convert_to_string(fileBuffer, utf8_length, 0);
+                printf("name is: %s \n", message);
+                break;
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+                printf("tag %d is not implemented yet", tag);
+                break;
+            case 7:
+                printf("tag is class\n");
+                int name_index = parse_16(fileBuffer);
+                printf("ref tag: %d, name_index: %d\n", 7, name_index);
+                break;
+            case 8:
+                printf("tag is string info\n");
+                struct ConstantPoolInfo *stringInfo = malloc(sizeof(struct ConstantPoolInfo));
+                stringInfo->tag = 8;
+                stringInfo->string_index = parse_16(fileBuffer);
+
+                printf("ref tag: %d, string_index: %d\n", stringInfo->tag, stringInfo->string_index);
+                free(stringInfo);
+                break;
+            case 9:
+                printf("tag is fieldref\n");
+                struct ConstantPoolInfo *fieldRef = malloc(sizeof(struct ConstantPoolInfo));
+                fieldRef->tag = 9;
+                fieldRef->class_index = parse_16(fileBuffer);
+                fieldRef->name_and_type_index = parse_16(fileBuffer);
+
+                printf("ref tag: %d, class_index: %d, type_index: %d \n", fieldRef->tag, fieldRef->class_index, fieldRef->name_and_type_index);
+
+                free(fieldRef);
+                break;
+            case 10:
+                printf("tag is methodref\n");
+                struct ConstantPoolInfo *methodRef = malloc(sizeof(struct ConstantPoolInfo));
+                methodRef->tag = 10;
+                methodRef->class_index = parse_16(fileBuffer);
+                methodRef->name_and_type_index = parse_16(fileBuffer);
+
+                printf("ref tag: %d, class_index: %d, type_index: %d \n", methodRef->tag, methodRef->class_index, methodRef->name_and_type_index);
+
+                free(methodRef);
+
+                break;
+            case 11:
+                printf("tag is interface methodref\n");
+                struct ConstantPoolInfo *interfaceRef = malloc(sizeof(struct ConstantPoolInfo));
+                interfaceRef->tag = 11;
+                interfaceRef->class_index = parse_16(fileBuffer);
+                interfaceRef->name_and_type_index = parse_16(fileBuffer);
+
+                printf("ref tag: %d, class_index: %d, type_index: %d \n", interfaceRef->tag, interfaceRef->class_index, interfaceRef->name_and_type_index);
+                free(interfaceRef);
+
+                break;
+            case 12:
+                printf("tag is NameAndType");
+                int name_and_tag_name_index = parse_16(fileBuffer);
+                int name_and_tag_descriptor_index = parse_16(fileBuffer);
+                printf("ref tag: %d, name index: %d, descriptor index: %d \n", 12, name_and_tag_name_index, name_and_tag_descriptor_index);
+                break;
+            case 13:
+            case 14:
+            case 15:
+            case 16:
+            case 17:
+            case 18:
+                printf("tag %d is not implemented yet", tag);
+                break;
+            default:
+                printf("tag is unknown %d \n", tag);
+                break;
+        }
+    }
+}
 
 int main(int argc, char *argv[]) {
     FILE *java_class_pointer;
@@ -51,144 +199,73 @@ int main(int argc, char *argv[]) {
     rewind(java_class_pointer);
 
     buffer = (char *)malloc(filelen * sizeof(unsigned char));
-    fread(buffer, filelen, 1, java_class_pointer);
-    fclose(java_class_pointer);
+    //fread(buffer, filelen, 1, java_class_pointer);
 
+    struct ClassFileBuffer *fileBuffer = malloc(sizeof(struct ClassFileBuffer));
+    fileBuffer->buffer = (unsigned char *)malloc(filelen * sizeof(unsigned char));
+    fread(fileBuffer->buffer, filelen, 1, java_class_pointer);
+    fileBuffer->moving_buffer = &fileBuffer->buffer[0];
+
+    fclose(java_class_pointer);
     
     moving_buffer = &buffer[0];
     struct ClassFile *classFile = malloc(sizeof(struct ClassFile));
 
-    classFile->magic = convert_byte_to_int(moving_buffer);
-    moving_buffer += 4;
-    classFile->version_minor = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
-    classFile->version_major = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
-    classFile->constant_pool_count = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
+    parse_meta_fields(fileBuffer, classFile);
 
-    int index = 0;
-    int has_errors = 0;
-    //for (index = 0; index > classFile->constant_pool_count; index++) {
-    for (index = 0; index < classFile->constant_pool_count - 1; index++) {
-        if (has_errors == 1) {
-            return 0;
+    classFile->constant_pool_count = parse_16(fileBuffer);
+
+    parse_constant_pool(fileBuffer, classFile);
+
+    classFile->access_flags = parse_16(fileBuffer);
+    
+    classFile->this_class = parse_16(fileBuffer);
+
+    classFile->super_class = parse_16(fileBuffer);
+
+    classFile->interfaces_count = parse_16(fileBuffer);
+
+    if (classFile->interfaces_count > 0) {
+        printf("interfaces are not supported yet \n");
+        return 0;
+    }
+    //this is a bit muddy right now. should i add 2 to the moving_buffer?
+    classFile->interfaces = parse_16(fileBuffer);
+
+    classFile->methods_count = parse_16(fileBuffer);
+
+    int method_index = 0;
+    for (method_index = 0; method_index < classFile->methods_count; method_index++) {
+        struct MethodInfo *methodInfo = malloc(sizeof(struct MethodInfo));
+        methodInfo->access_flags = parse_16(fileBuffer);
+        methodInfo->name_index = parse_16(fileBuffer);
+        methodInfo->descriptor_index = parse_16(fileBuffer);
+        methodInfo->attributes_count = parse_16(fileBuffer);
+
+        printf("method: access_flags %d; name_index %d; descriptor_index %d; attributes_count %d \n", methodInfo->access_flags, methodInfo->name_index, methodInfo->descriptor_index, methodInfo->attributes_count);
+
+        //attributes
+        int attribute_i = 0;
+        for (attribute_i = 0; attribute_i < methodInfo->attributes_count; attribute_i++) {
+            struct CodeAttribute *attribute = malloc(sizeof(struct CodeAttribute));
+            attribute->attribute_name_index = parse_16(fileBuffer);
+            attribute->attribute_length = parse_32(fileBuffer);
+            attribute->max_stack = parse_16(fileBuffer);
+            attribute->max_locals = parse_16(fileBuffer);
+            attribute->code_length = parse_32(fileBuffer);
+            char *attribute_info = convert_to_string(fileBuffer, attribute->code_length, 0);
+            
+            printf("attribute name i: %d; len: %d; \n", attribute->attribute_name_index, attribute->code_length);
         }
-        int tag = moving_buffer[0];
-        moving_buffer += 1;
-        printf("---------------------\n");
-        printf("index %d \n", index + 1);
-        switch (tag) {
-            case 0:
-                printf("tag 0 is wrong \n");
-                has_errors = 1;
-                break;
-            case 1:
-                printf("tag is utf8\n");
-                int utf8_length = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                char *message = convert_to_string(moving_buffer, utf8_length);
-                moving_buffer += utf8_length;
-                printf("name is: %s \n", message);
-                break;
-            case 2:
-            case 3:
-            case 4:
-            case 5:
-            case 6:
-                printf("tag %d is not implemented yet", tag);
-                has_errors = 1;
-                break;
-            case 7:
-                printf("tag is class\n");
-                int name_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                printf("ref tag: %d, name_index: %d\n", 7, name_index);
-                break;
-            case 8:
-                printf("tag is string info\n");
-                struct ConstantPoolInfo *stringInfo = malloc(sizeof(struct ConstantPoolInfo));
-                stringInfo->tag = 8;
-                stringInfo->string_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
 
-                printf("ref tag: %d, string_index: %d\n", stringInfo->tag, stringInfo->string_index);
-                free(stringInfo);
-                break;
-            case 9:
-                printf("tag is fieldref\n");
-                struct ConstantPoolInfo *fieldRef = malloc(sizeof(struct ConstantPoolInfo));
-                fieldRef->tag = 9;
-                fieldRef->class_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                fieldRef->name_and_type_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-
-                printf("ref tag: %d, class_index: %d, type_index: %d \n", fieldRef->tag, fieldRef->class_index, fieldRef->name_and_type_index);
-
-                free(fieldRef);
-                break;
-            case 10:
-                printf("tag is methodref\n");
-                struct ConstantPoolInfo *methodRef = malloc(sizeof(struct ConstantPoolInfo));
-                methodRef->tag = 10;
-                methodRef->class_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                methodRef->name_and_type_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-
-                printf("ref tag: %d, class_index: %d, type_index: %d \n", methodRef->tag, methodRef->class_index, methodRef->name_and_type_index);
-
-                free(methodRef);
-
-                break;
-            case 11:
-                printf("tag is interface methodref\n");
-                struct ConstantPoolInfo *interfaceRef = malloc(sizeof(struct ConstantPoolInfo));
-                interfaceRef->tag = 11;
-                interfaceRef->class_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                interfaceRef->name_and_type_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-
-                printf("ref tag: %d, class_index: %d, type_index: %d \n", interfaceRef->tag, interfaceRef->class_index, interfaceRef->name_and_type_index);
-                free(interfaceRef);
-
-                break;
-            case 12:
-                printf("tag is NameAndType");
-                int name_and_tag_name_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                int name_and_tag_descriptor_index = convert_16bit_to_int(moving_buffer);
-                moving_buffer += 2;
-                printf("ref tag: %d, name index: %d, descriptor index: %d \n", 12, name_and_tag_name_index, name_and_tag_descriptor_index);
-                break;
-            case 13:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-            case 18:
-                printf("tag %d is not implemented yet", tag);
-                has_errors = 1;
-                break;
-            default:
-                printf("tag is unknown %d \n", tag);
-                break;
-        }
     }
 
-    classFile->access_flags = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
-    
-    classFile->this_class = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
+    if (classFile->methods_count > 0) {
+        printf("methods are not supported yet \n");
+        //return 0;
+    }
 
-    classFile->super_class = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
-
-    classFile->interfaces_count = convert_16bit_to_int(moving_buffer);
-    moving_buffer += 2;
+    classFile->attributes_count = parse_16(fileBuffer);
 
     printf("-----------------------------\n");
     printf("file length: %ld \n", filelen);
@@ -200,6 +277,9 @@ int main(int argc, char *argv[]) {
     printf("this_class %d \n", classFile->this_class);
     printf("super_class %d \n", classFile->super_class);
     printf("interface count %d \n", classFile->interfaces_count);
+    printf("interfaces %d \n", classFile->interfaces);
+    printf("method count %d \n", classFile->methods_count);
+    printf("attributes count %d \n", classFile->attributes_count);
 
     return 0;
 }
