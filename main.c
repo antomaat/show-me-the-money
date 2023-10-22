@@ -29,8 +29,7 @@ u_int8_t parse_8(struct ClassFileBuffer *classFileBuffer) {
 
 char *convert_to_string(struct ClassFileBuffer *classFileBuffer, int length, int is_print) {
     char *message = malloc(length + 1);
-    int i = 0;
-    for (i = 0; i < length; i++) {
+    for (size_t i = 0; i < length; i++) {
         message[i] = classFileBuffer->moving_buffer[i];
     }
     message[length] = '\0';
@@ -85,7 +84,7 @@ struct MethodInfo {
     int name_index;
     int descriptor_index;
     int attributes_count;
-    struct AttributeInfo attributes[];
+    struct CodeAttribute *code_attributes;
 };
 
 
@@ -96,11 +95,10 @@ void parse_meta_fields(struct ClassFileBuffer *fileBuffer, struct ClassFile *cla
 }
 
 void parse_constant_pool(struct ClassFileBuffer *fileBuffer, struct ClassFile *classFile) {
-    int index = 0;
-    for (index = 0; index < classFile->constant_pool_count - 1; index++) {
+    for (size_t index = 0; index < classFile->constant_pool_count - 1; index++) {
         int tag = parse_8(fileBuffer);
         printf("---------------------\n");
-        printf("index %d \n", index + 1);
+        printf("index %ld \n", index + 1);
         switch (tag) {
             case 0:
                 printf("tag 0 is wrong \n");
@@ -223,40 +221,43 @@ int main(int argc, char *argv[]) {
         printf("interfaces are not supported yet \n");
         return 0;
     }
-    //this is a bit muddy right now. should i add 2 to the moving_buffer?
+
     classFile->interfaces = parse_16(fileBuffer);
 
     classFile->methods_count = parse_16(fileBuffer);
 
-    int method_index = 0;
-    for (method_index = 0; method_index < classFile->methods_count; method_index++) {
+    for (size_t method_index = 0; method_index < classFile->methods_count; method_index++) {
         struct MethodInfo *methodInfo = malloc(sizeof(struct MethodInfo));
         methodInfo->access_flags = parse_16(fileBuffer);
         methodInfo->name_index = parse_16(fileBuffer);
         methodInfo->descriptor_index = parse_16(fileBuffer);
         methodInfo->attributes_count = parse_16(fileBuffer);
+        methodInfo->code_attributes = malloc(sizeof(struct CodeAttribute) * methodInfo->attributes_count);
 
         printf("method: access_flags %d; name_index %d; descriptor_index %d; attributes_count %d \n", methodInfo->access_flags, methodInfo->name_index, methodInfo->descriptor_index, methodInfo->attributes_count);
 
         //attributes
-        int attribute_i = 0;
-        for (attribute_i = 0; attribute_i < methodInfo->attributes_count; attribute_i++) {
+        for (size_t attribute_i = 0; attribute_i < methodInfo->attributes_count; attribute_i++) {
             struct CodeAttribute *attribute = malloc(sizeof(struct CodeAttribute));
             attribute->attribute_name_index = parse_16(fileBuffer);
             attribute->attribute_length = parse_32(fileBuffer);
             attribute->max_stack = parse_16(fileBuffer);
             attribute->max_locals = parse_16(fileBuffer);
             attribute->code_length = parse_32(fileBuffer);
-            char *attribute_info = convert_to_string(fileBuffer, attribute->code_length, 0);
-            
+            unsigned char attribute_info[attribute->code_length];
+            for (size_t code_i = 0; code_i < attribute->code_length; code_i++) {
+                attribute_info[code_i] = fileBuffer->moving_buffer[code_i];
+            }
+            fileBuffer->moving_buffer += attribute->code_length;
+            attribute->exception_table_length = parse_16(fileBuffer);
+            fileBuffer += attribute->exception_table_length;
+            attribute->attributes_count = parse_16(fileBuffer);
+    
             printf("attribute name i: %d; len: %d; \n", attribute->attribute_name_index, attribute->code_length);
+            methodInfo->code_attributes[attribute_i] = *attribute;
+
         }
 
-    }
-
-    if (classFile->methods_count > 0) {
-        printf("methods are not supported yet \n");
-        //return 0;
     }
 
     classFile->attributes_count = parse_16(fileBuffer);
