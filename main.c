@@ -202,9 +202,54 @@ void parseCodeAttributes(struct MethodInfo *methodInfo, struct ClassFileBuffer *
         }
 }
 
+void print_all_cp_tags(struct ClassFile *classFile, int show_index) {
+    for (size_t i = 0; i < classFile->constant_pool_count; i++) {
+        struct ConstantPoolInfo cp_info = classFile->constant_pool[i];
+        if (show_index) {
+            printf("---------------------\n");
+            printf("index %ld \n", i);
+        }
+        switch (cp_info.tag) {
+            case CONSTANT_CLASS:
+                printf("tag is CONSTANT_CLASS \n");
+                printf("    name_index: %d \n", cp_info.name_index);
+                printf("    index %ld \n", i);
+                break;
+            case CONSTANT_UTF8:
+                printf("tag is CONSTANT_UTF8 \n");
+                printf("    string: %s\n", cp_info.bytes);
+                printf("    index %ld \n", i);
+                break;
+            case CONSTANT_STRING:
+                printf("tag is CONSTANT_STRING \n");
+                printf("    string_index: %d\n", cp_info.string_index);
+                printf("    index %ld \n", i);
+                break;
+            case CONSTANT_FIELDREF:
+                printf("tag is CONSTANT_FIELDREF \n");
+                printf("    class_index: %d\n", cp_info.class_index);
+                printf("    name_and_type_index: %d\n", cp_info.name_and_type_index);
+                printf("    index %ld \n", i);
+                break;
+            default: 
+                break;
+                //printf("tag %d in index: %d \n", cp_info.tag, cp_info.class_index);
+        }
+    }
+}
+
 void print_cp_index(struct ClassFile *classFile, int index) {
     struct ConstantPoolInfo cp_info = classFile->constant_pool[index];
-    printf("tag %d in index: %d \n", cp_info.tag, cp_info.class_index);
+    switch (cp_info.tag) {
+        case CONSTANT_CLASS:
+            printf("tag is class \n");
+            char *class_name = classFile->constant_pool[cp_info.name_index].bytes;
+            printf("class name is %s \n", class_name);
+            break;
+        default:
+            break;
+            //printf("tag %d in index: %d \n", cp_info.tag, cp_info.class_index);
+    }
 }
 
 
@@ -216,7 +261,10 @@ void print_class(struct ClassFile *classFile) {
     printf("access_flags %d \n", classFile->access_flags);
     printf("this_class %d \n", classFile->this_class);
     printf("super_class %d \n", classFile->super_class);
-    print_cp_index(classFile, 0);
+    print_all_cp_tags(classFile, 0);
+    //for (size_t i = 0; i < classFile->constant_pool_count; i++) {
+    //    print_cp_index(classFile, i);
+    //}
 //    printf("interface count %d \n", classFile->interfaces_count);
 //    printf("interfaces %d \n", classFile->interfaces);
 //    printf("method count %d \n", classFile->methods_count);
