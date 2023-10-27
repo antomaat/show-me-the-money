@@ -202,49 +202,60 @@ void parseCodeAttributes(struct MethodInfo *methodInfo, struct ClassFileBuffer *
         }
 }
 
-void print_all_cp_tags(struct ClassFile *classFile, int show_index) {
-    for (size_t i = 0; i < classFile->constant_pool_count; i++) {
-        struct ConstantPoolInfo cp_info = classFile->constant_pool[i];
-        if (show_index) {
-            printf("---------------------\n");
-            printf("index %ld \n", i);
-        }
-        switch (cp_info.tag) {
-            case CONSTANT_CLASS:
-                printf("tag is CONSTANT_CLASS \n");
-                printf("    name_index: %d \n", cp_info.name_index);
-                printf("    index %ld \n", i);
-                break;
-            case CONSTANT_UTF8:
-                printf("tag is CONSTANT_UTF8 \n");
-                printf("    string: %s\n", cp_info.bytes);
-                printf("    index %ld \n", i);
-                break;
-            case CONSTANT_STRING:
-                printf("tag is CONSTANT_STRING \n");
-                printf("    string_index: %d\n", cp_info.string_index);
-                printf("    index %ld \n", i);
-                break;
-            case CONSTANT_FIELDREF:
-                printf("tag is CONSTANT_FIELDREF \n");
-                printf("    class_index: %d\n", cp_info.class_index);
-                printf("    name_and_type_index: %d\n", cp_info.name_and_type_index);
-                printf("    index %ld \n", i);
-                break;
-            default: 
-                break;
-                //printf("tag %d in index: %d \n", cp_info.tag, cp_info.class_index);
-        }
-    }
+char *get_string(struct ClassFile *classFile, int index) {
+    return classFile->constant_pool[index-1].bytes;
 }
+
+char *get_class_name(struct ClassFile *classFile, int index) {
+    return get_string(classFile, classFile->constant_pool[index-1].name_index);
+}
+
+char *get_name_and_type_name(struct ClassFile *classFile, int index) {
+    int method_ref_name_and_type_i = classFile->constant_pool[index-1].name_index;
+    return classFile->constant_pool[method_ref_name_and_type_i-1].bytes;
+}
+
+char *get_name_and_type_type(struct ClassFile *classFile, int index) {
+    int method_ref_descriptor_i = classFile->constant_pool[index-1].descriptor_index;
+    return classFile->constant_pool[method_ref_descriptor_i-1].bytes;
+}
+
 
 void print_cp_index(struct ClassFile *classFile, int index) {
     struct ConstantPoolInfo cp_info = classFile->constant_pool[index];
     switch (cp_info.tag) {
+        case CONSTANT_METHODREF:
+            printf("tag is CONSTANT_METHODREF \n");
+            printf("    class_name: %s\n", get_class_name(classFile, cp_info.class_index));
+            printf("    name and type: <%s : %s>\n", 
+                   get_name_and_type_name(classFile, cp_info.name_and_type_index), 
+                   get_name_and_type_type(classFile, cp_info.name_and_type_index));
+            break;
         case CONSTANT_CLASS:
-            printf("tag is class \n");
-            char *class_name = classFile->constant_pool[cp_info.name_index].bytes;
-            printf("class name is %s \n", class_name);
+            printf("tag is CONSTANT_CLASS \n");
+            printf("    class name: %s \n", get_string(classFile, cp_info.name_index));
+            break;
+        case CONSTANT_UTF8:
+                printf("tag is CONSTANT_UTF8 \n");
+                printf("    string: %s \n", cp_info.bytes);
+                break;
+        case CONSTANT_STRING:
+            printf("tag is CONSTANT_STRING \n");
+            printf("    string: %s\n", get_string(classFile, cp_info.string_index));
+            break;
+        case CONSTANT_FIELDREF:
+            ;
+            printf("tag is CONSTANT_FIELDREF \n");
+            printf("    class_name: %s\n", get_class_name(classFile, cp_info.class_index));
+            printf("    name and type: <%s : %s>\n", 
+                   get_name_and_type_name(classFile, cp_info.name_and_type_index), 
+                   get_name_and_type_type(classFile, cp_info.name_and_type_index));
+            break;
+        case CONSTANT_NAME_AND_TYPE:
+            printf("tag is CONSTANT_NAME_AND_TYPE \n");
+            printf("    name and type: <%s : %s>\n", 
+                   get_string(classFile, cp_info.name_index), 
+                   get_string(classFile, cp_info.descriptor_index));
             break;
         default:
             break;
@@ -252,6 +263,19 @@ void print_cp_index(struct ClassFile *classFile, int index) {
     }
 }
 
+void print_all_cp_tags(struct ClassFile *classFile) {
+    for (size_t i = 0; i < classFile->constant_pool_count; i++) {
+        print_cp_index(classFile, i);
+    }
+}
+
+void print_cp_with_tag(struct ClassFile *classFile, int tag) {
+    for (size_t i = 0; i < classFile->constant_pool_count; i++) {
+        if (classFile->constant_pool[i].tag == tag) {
+            print_cp_index(classFile, i);
+        }
+    }
+}
 
 void print_class(struct ClassFile *classFile) {
     printf("-----------------------------\n");
@@ -259,9 +283,12 @@ void print_class(struct ClassFile *classFile) {
     printf("version: %d.%d \n", classFile->version_major, classFile->version_minor);
     printf("constant_pool_count: %d\n", classFile->constant_pool_count);
     printf("access_flags %d \n", classFile->access_flags);
-    printf("this_class %d \n", classFile->this_class);
-    printf("super_class %d \n", classFile->super_class);
-    print_all_cp_tags(classFile, 0);
+    printf("this_class %s \n",  get_class_name(classFile, classFile->this_class));
+    printf("super_class %s \n", get_class_name(classFile, classFile->super_class));
+
+    print_cp_with_tag(classFile, CONSTANT_CLASS);
+    //print_all_cp_tags(classFile);
+    //print_all_cp_tags(classFile, 0);
     //for (size_t i = 0; i < classFile->constant_pool_count; i++) {
     //    print_cp_index(classFile, i);
     //}
