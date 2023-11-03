@@ -3,6 +3,7 @@
 
 #include "class_structs.h"
 #include "print_class.h"
+#include "query_utils.h"
 
 
 
