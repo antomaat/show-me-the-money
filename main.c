@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-
+#include "print_class.h"
+#include "class_structs.h"
 
 struct ClassFileBuffer {
     unsigned char *buffer;
@@ -39,63 +40,7 @@ char *convert_to_string(struct ClassFileBuffer *classFileBuffer, int length, int
     return message;
 }
 
-struct ConstantPoolInfo {
-    int tag;
-    int class_index;
-    int name_index;
-    int descriptor_index;
-    int name_and_type_index;
-    int string_index;
-    int utf8_length;
-    char *bytes;
-};
-
-struct ClassFile {
-    int magic;
-    int version_minor;
-    int version_major;
-    int constant_pool_count;
-    struct ConstantPoolInfo *constant_pool;
-    int access_flags;
-    int this_class;
-    int super_class;
-    int interfaces_count;
-    int interfaces;
-    int methods_count;
-    struct MethodInfo *methods;
-    int attributes_count;
-};
-
-
-struct AttributeInfo {
-    int attribute_name_index;
-    int attribute_length;
-    unsigned char *info;
-};
-
-struct CodeAttribute {
-    int attribute_name_index;
-    int attribute_length;
-    int max_stack;
-    int max_locals;
-    int code_length;
-    int exception_table_length;
-    int exception_table;
-    int attributes_count;
-    struct AttributeInfo attributes;
-};
-
-struct MethodInfo {
-    int access_flags;
-    int name_index;
-    int descriptor_index;
-    int attributes_count;
-    struct AttributeInfo *attribute_info;
-    struct CodeAttribute *code_attributes;
-};
-
-
-void parse_meta_fields(struct ClassFileBuffer *fileBuffer, struct ClassFile *classFile) {
+void parse_meta_fields(struct ClassFileBuffer *fileBuffer, ClassFile *classFile) {
     classFile->magic = parse_32(fileBuffer);
     classFile->version_minor = parse_16(fileBuffer);
     classFile->version_major = parse_16(fileBuffer);
@@ -113,10 +58,10 @@ void parse_meta_fields(struct ClassFileBuffer *fileBuffer, struct ClassFile *cla
 #define CONSTANT_INTERFACE_METHODREF 11
 #define CONSTANT_NAME_AND_TYPE 12
 
-void parse_constant_pool(struct ClassFileBuffer *fileBuffer, struct ClassFile *classFile) {
-    classFile->constant_pool = malloc(sizeof(struct ConstantPoolInfo) * classFile->constant_pool_count);
+void parse_constant_pool(struct ClassFileBuffer *fileBuffer, ClassFile *classFile) {
+    classFile->constant_pool = malloc(sizeof(ConstantPoolInfo) * classFile->constant_pool_count);
     for (size_t index = 0; index < classFile->constant_pool_count - 1; index++) {
-        struct ConstantPoolInfo *cp_info = malloc(sizeof(struct ConstantPoolInfo));
+        ConstantPoolInfo *cp_info = malloc(sizeof(ConstantPoolInfo));
         int tag = parse_8(fileBuffer);
         cp_info->tag = tag;
         switch (tag) {
@@ -181,9 +126,9 @@ void parse_constant_pool(struct ClassFileBuffer *fileBuffer, struct ClassFile *c
     }
 }
 
-void parseCodeAttributes(struct MethodInfo *methodInfo, struct ClassFileBuffer *fileBuffer) {
+void parseCodeAttributes(MethodInfo *methodInfo, struct ClassFileBuffer *fileBuffer) {
         for (size_t attribute_i = 0; attribute_i < methodInfo->attributes_count; attribute_i++) {
-            struct CodeAttribute *attribute = malloc(sizeof(struct CodeAttribute));
+            CodeAttribute *attribute = malloc(sizeof(CodeAttribute));
             attribute->attribute_name_index = parse_16(fileBuffer);
             attribute->attribute_length = parse_32(fileBuffer);
             attribute->max_stack = parse_16(fileBuffer);
@@ -202,101 +147,24 @@ void parseCodeAttributes(struct MethodInfo *methodInfo, struct ClassFileBuffer *
         }
 }
 
-char *get_string(struct ClassFile *classFile, int index) {
+char *get_string(ClassFile *classFile, int index) {
     return classFile->constant_pool[index-1].bytes;
 }
 
-char *get_class_name(struct ClassFile *classFile, int index) {
+char *get_class_name(ClassFile *classFile, int index) {
     return get_string(classFile, classFile->constant_pool[index-1].name_index);
 }
 
-char *get_name_and_type_name(struct ClassFile *classFile, int index) {
+char *get_name_and_type_name(ClassFile *classFile, int index) {
     int method_ref_name_and_type_i = classFile->constant_pool[index-1].name_index;
     return classFile->constant_pool[method_ref_name_and_type_i-1].bytes;
 }
 
-char *get_name_and_type_type(struct ClassFile *classFile, int index) {
+char *get_name_and_type_type(ClassFile *classFile, int index) {
     int method_ref_descriptor_i = classFile->constant_pool[index-1].descriptor_index;
     return classFile->constant_pool[method_ref_descriptor_i-1].bytes;
 }
 
-
-void print_cp_index(struct ClassFile *classFile, int index) {
-    struct ConstantPoolInfo cp_info = classFile->constant_pool[index];
-    switch (cp_info.tag) {
-        case CONSTANT_METHODREF:
-            printf("tag is CONSTANT_METHODREF \n");
-            printf("    class_name: %s\n", get_class_name(classFile, cp_info.class_index));
-            printf("    name and type: <%s : %s>\n", 
-                   get_name_and_type_name(classFile, cp_info.name_and_type_index), 
-                   get_name_and_type_type(classFile, cp_info.name_and_type_index));
-            break;
-        case CONSTANT_CLASS:
-            printf("tag is CONSTANT_CLASS \n");
-            printf("    class name: %s \n", get_string(classFile, cp_info.name_index));
-            break;
-        case CONSTANT_UTF8:
-                printf("tag is CONSTANT_UTF8 \n");
-                printf("    string: %s \n", cp_info.bytes);
-                break;
-        case CONSTANT_STRING:
-            printf("tag is CONSTANT_STRING \n");
-            printf("    string: %s\n", get_string(classFile, cp_info.string_index));
-            break;
-        case CONSTANT_FIELDREF:
-            ;
-            printf("tag is CONSTANT_FIELDREF \n");
-            printf("    class_name: %s\n", get_class_name(classFile, cp_info.class_index));
-            printf("    name and type: <%s : %s>\n", 
-                   get_name_and_type_name(classFile, cp_info.name_and_type_index), 
-                   get_name_and_type_type(classFile, cp_info.name_and_type_index));
-            break;
-        case CONSTANT_NAME_AND_TYPE:
-            printf("tag is CONSTANT_NAME_AND_TYPE \n");
-            printf("    name and type: <%s : %s>\n", 
-                   get_string(classFile, cp_info.name_index), 
-                   get_string(classFile, cp_info.descriptor_index));
-            break;
-        default:
-            break;
-            //printf("tag %d in index: %d \n", cp_info.tag, cp_info.class_index);
-    }
-}
-
-void print_all_cp_tags(struct ClassFile *classFile) {
-    for (size_t i = 0; i < classFile->constant_pool_count; i++) {
-        print_cp_index(classFile, i);
-    }
-}
-
-void print_cp_with_tag(struct ClassFile *classFile, int tag) {
-    for (size_t i = 0; i < classFile->constant_pool_count; i++) {
-        if (classFile->constant_pool[i].tag == tag) {
-            print_cp_index(classFile, i);
-        }
-    }
-}
-
-void print_class(struct ClassFile *classFile) {
-    printf("-----------------------------\n");
-    printf("magic number: %x \n", classFile->magic);
-    printf("version: %d.%d \n", classFile->version_major, classFile->version_minor);
-    printf("constant_pool_count: %d\n", classFile->constant_pool_count);
-    printf("access_flags %d \n", classFile->access_flags);
-    printf("this_class %s \n",  get_class_name(classFile, classFile->this_class));
-    printf("super_class %s \n", get_class_name(classFile, classFile->super_class));
-
-    print_cp_with_tag(classFile, CONSTANT_CLASS);
-    //print_all_cp_tags(classFile);
-    //print_all_cp_tags(classFile, 0);
-    //for (size_t i = 0; i < classFile->constant_pool_count; i++) {
-    //    print_cp_index(classFile, i);
-    //}
-//    printf("interface count %d \n", classFile->interfaces_count);
-//    printf("interfaces %d \n", classFile->interfaces);
-//    printf("method count %d \n", classFile->methods_count);
-//    printf("attributes count %d \n", classFile->attributes_count);
-}
 
 int main(int argc, char *argv[]) {
     FILE *java_class_pointer;
@@ -314,7 +182,7 @@ int main(int argc, char *argv[]) {
 
     fclose(java_class_pointer);
     
-    struct ClassFile *classFile = malloc(sizeof(struct ClassFile));
+    ClassFile *classFile = malloc(sizeof(ClassFile));
 
     parse_meta_fields(fileBuffer, classFile);
 
@@ -338,21 +206,21 @@ int main(int argc, char *argv[]) {
     classFile->interfaces = parse_16(fileBuffer);
 
     classFile->methods_count = parse_16(fileBuffer);
-    classFile->methods = malloc(sizeof(struct MethodInfo) * classFile->methods_count);
+    classFile->methods = malloc(sizeof(MethodInfo) *classFile->methods_count);
 
     for (size_t method_index = 0; method_index < classFile->methods_count; method_index++) {
-        struct MethodInfo *methodInfo = malloc(sizeof(struct MethodInfo));
+        MethodInfo *methodInfo = malloc(sizeof(MethodInfo));
         methodInfo->access_flags = parse_16(fileBuffer);
         methodInfo->name_index = parse_16(fileBuffer);
         methodInfo->descriptor_index = parse_16(fileBuffer);
         methodInfo->attributes_count = parse_16(fileBuffer);
-        methodInfo->attribute_info = malloc(sizeof(struct AttributeInfo *) * methodInfo->attributes_count);
+        methodInfo->attribute_info = malloc(sizeof(AttributeInfo *) * methodInfo->attributes_count);
         //methodInfo->code_attributes = malloc(sizeof(struct CodeAttribute) * methodInfo->attributes_count);
 
         printf("method: access_flags %d; name_index %d; descriptor_index %d; attributes_count %d \n", methodInfo->access_flags, methodInfo->name_index, methodInfo->descriptor_index, methodInfo->attributes_count);
         
         for(size_t attr_i = 0; attr_i < methodInfo->attributes_count; attr_i++) {
-            struct AttributeInfo *attribute = malloc(sizeof(struct AttributeInfo));
+            AttributeInfo *attribute = malloc(sizeof(AttributeInfo));
             attribute->attribute_name_index = parse_16(fileBuffer);
             attribute->attribute_length = parse_32(fileBuffer);
             attribute->info = malloc(sizeof(char) * attribute->attribute_length);
