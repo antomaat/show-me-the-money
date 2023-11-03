@@ -1,4 +1,4 @@
 build:
-	gcc -o ./out/jvm main.c print_class.c class_structs.h
+	gcc -o ./out/jvm ./src/main.c ./src/print_class.c ./src/class_structs.h
 clean:
 	rm -f main 
