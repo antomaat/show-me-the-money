@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
     FILE *java_class_pointer;
     long filelen;
 
-    java_class_pointer = fopen("Main.class", "rb");
+    java_class_pointer = fopen("../Main.class", "rb");
     fseek(java_class_pointer, 0, SEEK_END);
     filelen = ftell(java_class_pointer);
     rewind(java_class_pointer);
