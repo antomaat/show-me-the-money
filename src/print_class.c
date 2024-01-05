@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -23,6 +24,7 @@ char *get_string(ClassFile *classFile, int index);
 char *get_class_name(ClassFile *classFile, int index);
 char *get_name_and_type_name(ClassFile *classFile, int index);
 char *get_name_and_type_type(ClassFile *classFile, int index);
+void print_method_info(ClassFile *classFile);
 
 
 void print_class(ClassFile *classFile) {
@@ -34,7 +36,7 @@ void print_class(ClassFile *classFile) {
     printf("this_class %s \n",  get_class_name(classFile, classFile->this_class));
     printf("super_class %s \n", get_class_name(classFile, classFile->super_class));
 
-    print_cp_with_tag(classFile, CONSTANT_CLASS);
+    //print_cp_with_tag(classFile, CONSTANT_CLASS);
     //print_all_cp_tags(classFile);
     //print_all_cp_tags(classFile);
     //for (size_t i = 0; i < classFile->constant_pool_count; i++) {
@@ -42,7 +44,8 @@ void print_class(ClassFile *classFile) {
     //}
 //    printf("interface count %d \n", classFile->interfaces_count);
 //    printf("interfaces %d \n", classFile->interfaces);
-//    printf("method count %d \n", classFile->methods_count);
+    printf("method count %d \n", classFile->methods_count);
+    print_method_info(classFile);
 //    printf("attributes count %d \n", classFile->attributes_count);
 }
 
@@ -102,3 +105,20 @@ void print_cp_with_tag(ClassFile *classFile, int tag) {
     }
 }
 
+void print_method_info(ClassFile *classFile) {
+    for (size_t i = 0; i < classFile->methods_count; i++) {
+        printf("method name %s \n", get_string(classFile, classFile->methods[i].name_index));
+        printf("method descriptor%s \n", get_string(classFile, classFile->methods[i].descriptor_index));
+
+        // print the attribute infos
+        for (size_t attr_i = 0; attr_i < classFile->methods[i].attributes_count; attr_i++) {
+            printf("attribute info name %s \n", get_string(classFile, classFile->methods[i].attribute_info[attr_i].attribute_name_index));
+        }
+    }
+}
+
+void print_code_attributes(ClassFile *classFile, AttributeInfo attributeInfo) {
+    if (is_code_attribute(classFile,  attributeInfo) == 1) {
+        // add attribute info printing here
+    }
+}
