@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include "class_structs.h"
 #include "parser.h"
+#include "query_utils.h"
 
 #define CONSTANT_UTF8 1
 #define CONSTANT_INTEGER 3
@@ -121,8 +122,11 @@ void parse_constant_pool(ClassFileBuffer *fileBuffer, ClassFile *classFile) {
     }
 }
 
-void parseCodeAttributes(MethodInfo *methodInfo, ClassFileBuffer *fileBuffer) {
+void parseCodeAttributes(MethodInfo *methodInfo, ClassFileBuffer *fileBuffer, ClassFile *classFile) {
         for (size_t attribute_i = 0; attribute_i < methodInfo->attributes_count; attribute_i++) {
+            if (is_code_attribute(classFile, methodInfo->attribute_info[attribute_i]) == 0) {
+                continue;
+            }
             CodeAttribute *attribute = malloc(sizeof(CodeAttribute));
             attribute->attribute_name_index = parse_16(fileBuffer);
             attribute->attribute_length = parse_32(fileBuffer);
@@ -140,4 +144,31 @@ void parseCodeAttributes(MethodInfo *methodInfo, ClassFileBuffer *fileBuffer) {
     
             methodInfo->code_attributes[attribute_i] = *attribute;
         }
+}
+
+CodeAttribute parseCodeAttribute(AttributeInfo attributeInfo) {
+    ClassFileBuffer *attributeBuffer = malloc(sizeof(ClassFileBuffer));
+    attributeBuffer->buffer = (unsigned char *)malloc(attributeInfo.attribute_length * sizeof(unsigned char));
+    attributeBuffer->buffer = attributeInfo.info;
+    attributeBuffer->moving_buffer = &attributeBuffer->buffer[0];
+
+    CodeAttribute *attribute = malloc(sizeof(CodeAttribute));
+    attribute->attribute_name_index = parse_16(attributeBuffer);
+    attribute->attribute_length = parse_32(attributeBuffer);
+    attribute->max_stack = parse_16(attributeBuffer);
+    attribute->max_locals = parse_16(attributeBuffer);
+    attribute->code_length = parse_32(attributeBuffer);
+    unsigned char attribute_info[attribute->code_length];
+    for (size_t code_i = 0; code_i < attribute->code_length; code_i++) {
+        attribute_info[code_i] = attributeBuffer->moving_buffer[code_i];
+    }
+    attributeBuffer->moving_buffer += attribute->code_length;
+    attribute->exception_table_length = parse_16(attributeBuffer);
+    attributeBuffer += attribute->exception_table_length;
+    attribute->attributes_count = parse_16(attributeBuffer);
+
+    memset(attributeBuffer->buffer, 0, attributeInfo.attribute_length * sizeof(unsigned char));
+    memset(attributeBuffer, 0, attributeInfo.attribute_length * sizeof(ClassFileBuffer));
+
+    return *attribute;
 }
